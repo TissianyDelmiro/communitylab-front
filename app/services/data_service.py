@@ -63,8 +63,36 @@ def parse_interacoes(nome_arquivo, conteudo):
 
 
 # ---------- Análise ----------
+ORIGEM_ANALISE = "mock"   # "gemini" quando a análise real responde
+ULTIMO_ERRO = ""          # preenchido quando a análise real falha
+
+
 def analisar(interacoes):
-    """TODO(back): enviar as interações e receber histórias + ativos gerados."""
+    """Analisa as interações com o provedor de LLM.
+
+    Se a chave não estiver configurada ou a chamada falhar, devolve o mock
+    (o protótipo continua navegável) e registra o motivo em ULTIMO_ERRO.
+    """
+    global ORIGEM_ANALISE, ULTIMO_ERRO
+    try:
+        from . import llm  # import local: evita custo quando não usado
+    except ImportError:  # pragma: no cover - execução como pacote vs. script
+        from services import llm  # type: ignore
+
+    try:
+        historias = llm.analisar(interacoes)
+        if historias:
+            ORIGEM_ANALISE = "gemini"
+            ULTIMO_ERRO = ""
+            print(f"[analise] gemini OK: {len(historias)} historias", flush=True)
+            return historias
+        ULTIMO_ERRO = "O modelo não encontrou histórias com potencial neste lote."
+        print(f"[analise] gemini sem historias: {ULTIMO_ERRO}", flush=True)
+    except Exception as erro:  # rede, chave ausente, JSON inválido
+        ULTIMO_ERRO = str(erro)
+        print(f"[analise] FALHOU -> fallback mock: {ULTIMO_ERRO}", flush=True)
+
+    ORIGEM_ANALISE = "mock"
     return copy.deepcopy(m.HISTORIAS)
 
 
